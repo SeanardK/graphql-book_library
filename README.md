@@ -1,40 +1,153 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/pages/api-reference/create-next-app).
+# GraphQL Book Library
+
+A full-stack book management application built with **Next.js**, **Apollo Server**, and **Apollo Client**. It demonstrates a complete GraphQL CRUD workflow; querying, filtering, paginating, and mutating data, all within a single Next.js project using the Pages Router.
+
+---
+
+## Features
+
+- **Browse books** - Responsive card grid with pagination and genre filtering
+- **Add books** - Create new entries via a modal form
+- **Edit books** - Update any field of an existing book inline
+- **Delete books** - Remove books with instant UI refresh
+- **GraphQL API** - Apollo Server 4 served directly from a Next.js API route
+- **Type-safe** - End-to-end TypeScript with shared interfaces
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | [Next.js 15](https://nextjs.org) (Pages Router, Turbopack) |
+| Language | TypeScript 5 |
+| GraphQL Server | [Apollo Server 4](https://www.apollographql.com/docs/apollo-server) + [@as-integrations/next](https://github.com/apollo-server-integrations/apollo-server-integration-next) |
+| GraphQL Client | [Apollo Client 3](https://www.apollographql.com/docs/react) |
+| Styling | [Tailwind CSS v3](https://tailwindcss.com) + [DaisyUI v4](https://daisyui.com) |
+| Package Manager | [pnpm](https://pnpm.io) |
+
+---
+
+## Project Structure
+
+```
+src/
+├── datas/
+│   └── books.ts          # In-memory seed data
+├── lib/
+│   └── graphql.tsx       # Apollo Client instance
+├── pages/
+│   ├── index.tsx         # Main UI — book list + CRUD forms
+│   └── api/
+│       └── books.ts      # GraphQL API route (Apollo Server)
+└── styles/
+    └── globals.css
+```
+
+---
+
+## GraphQL API
+
+The GraphQL endpoint is available at `POST /api/books`.
+
+### Queries
+
+```graphql
+# Fetch books with optional pagination and genre filter
+query Books($limit: Int, $offset: Int, $genre: String) {
+  books(limit: $limit, offset: $offset, genre: $genre) {
+    id
+    title
+    author
+    publishedYear
+    genre
+    price
+  }
+}
+
+# Fetch a single book by ID
+query Book($id: Int) {
+  book(id: $id) {
+    id
+    title
+    author
+    publishedYear
+    genre
+    price
+  }
+}
+```
+
+### Mutations
+
+```graphql
+mutation AddBook($title: String!, $author: String!, $price: Float!, $genre: String!, $publishedYear: Int!) {
+  addBook(title: $title, author: $author, price: $price, genre: $genre, publishedYear: $publishedYear) {
+    id
+    title
+  }
+}
+
+mutation UpdateBook($id: Float!, $title: String, $author: String, $price: Float, $genre: String, $publishedYear: Int) {
+  updateBook(id: $id, title: $title, author: $author, price: $price, genre: $genre, publishedYear: $publishedYear) {
+    id
+    title
+  }
+}
+
+mutation DeleteBook($id: Float!) {
+  deleteBook(id: $id)
+}
+```
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- [Node.js](https://nodejs.org) v18 or higher
+- [pnpm](https://pnpm.io) v8 or higher
+
+### Installation
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Clone the repository
+git clone https://github.com/SeanardK/graphql-book_library
+cd graphql-book_library
+
+# Install dependencies
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Running the Development Server
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+```bash
+pnpm dev
+```
 
-[API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) instead of React pages.
+### Building for Production
 
-This project uses [`next/font`](https://nextjs.org/docs/pages/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+pnpm build
+pnpm start
+```
 
-## Learn More
+### Linting
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+pnpm lint
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn-pages-router) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## How It Works
 
-## Deploy on Vercel
+1. **Apollo Server** is initialized in `src/pages/api/books.ts` using `startServerAndCreateNextHandler` from `@as-integrations/next`, which wraps it as a standard Next.js API route handler.
+2. **Schema & Resolvers** are defined in the same file. The resolver layer operates on an in-memory `books` array imported from `src/datas/books.ts`.
+3. **Apollo Client** (`src/lib/graphql.tsx`) points to the local `/api/books` endpoint and uses an `InMemoryCache` for client-side caching.
+4. The **front-end page** (`src/pages/index.tsx`) uses `useQuery` to fetch and display books, and `useMutation` to add, update, and delete them — calling `refetch()` after each mutation to keep the UI in sync.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/pages/building-your-application/deploying) for more details.
+---
