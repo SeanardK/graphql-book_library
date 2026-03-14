@@ -11,7 +11,7 @@ pipeline {
     stage('Prepare .env') {
       steps {
         withCredentials([file(credentialsId: 'graphql-book_library_env', variable: 'ENV_FILE')]) {
-          sh 'cp $ENV_FILE .env'
+          sh 'rm -f .env && cp $ENV_FILE .env'
         }
       }
     }
