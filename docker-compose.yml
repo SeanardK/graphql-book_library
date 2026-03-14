@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: seanard-graphql-book_library
     ports:
       - "${DOCKER_EXPOSED_PORT:-3000}:3000"
     environment:
