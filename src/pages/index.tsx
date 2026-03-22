@@ -2,11 +2,14 @@ import { gql, useQuery, useMutation } from "@apollo/client";
 import { useRef, useState } from "react";
 import client from "@/lib/graphql";
 import { Book } from "./api/books";
+import BookCard from "@/components/book-card";
+import Pagination from "@/components/pagination";
+import Modal from "@/components/modal";
 
 // GraphQL Queries & Mutations
 const GET_BOOKS = gql`
-  query Books($limit: Int, $offset: Int, $genre: String) {
-    books(limit: $limit, offset: $offset, genre: $genre) {
+  query Books($limit: Int, $offset: Int) {
+    books(limit: $limit, offset: $offset) {
       id
       title
       author
@@ -75,15 +78,34 @@ const DELETE_BOOK = gql`
   }
 `;
 
+const PAGE_SIZE = 12;
+
+const GENRE_BADGE: Record<string, string> = {
+  Fiction: "badge-primary",
+  "Non-Fiction": "badge-secondary",
+  Fantasy: "badge-accent",
+  "Science Fiction": "badge-info",
+  Dystopian: "badge-warning",
+  Mystery: "badge-error",
+  Thriller: "badge-error",
+  Romance: "badge-success",
+  Horror: "badge-neutral",
+};
+
+export function genreBadge(genre: string) {
+  return GENRE_BADGE[genre] ?? "badge-outline";
+}
+
 export default function Books() {
   const createModalRef = useRef<HTMLDialogElement>(null);
+  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { data, loading, error, refetch } = useQuery(GET_BOOKS, {
     client,
-    variables: {
-      limit: 6,
-      offset: 1,
-    },
+    variables: { limit: 100, offset: 0 },
   });
   const [addBook] = useMutation(ADD_BOOK, { client });
   const [updateBook] = useMutation(UPDATE_BOOK, { client });
@@ -98,17 +120,31 @@ export default function Books() {
   });
   const [editBook, setEditBook] = useState<Book | null>(null);
 
-  if (loading)
-    return (
-      <div className="flex justify-center mt-10">
-        <span className="loading loading-spinner"></span>
-      </div>
-    );
+  const allBooks: Book[] = data?.books ?? [];
+  const genres = [...new Set(allBooks.map((b: Book) => b.genre))].sort();
+  const query = searchQuery.trim().toLowerCase();
+  const visibleBooks = allBooks.filter((b: Book) => {
+    const matchesGenre = selectedGenre ? b.genre === selectedGenre : true;
+    const matchesSearch =
+      query === "" ||
+      b.title.toLowerCase().includes(query) ||
+      b.author.toLowerCase().includes(query) ||
+      b.genre.toLowerCase().includes(query);
+    return matchesGenre && matchesSearch;
+  });
+  const totalPages = Math.max(1, Math.ceil(visibleBooks.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pagedBooks = visibleBooks.slice(
+    (safePage - 1) * PAGE_SIZE,
+    safePage * PAGE_SIZE,
+  );
+  const avgPrice =
+    allBooks.length > 0
+      ? allBooks.reduce((s: number, b: Book) => s + b.price, 0) /
+        allBooks.length
+      : 0;
 
-  if (error)
-    return <p className="text-center text-red-500">Error loading books.</p>;
-
-  const handleResetForm = () =>
+  const handleResetForm = () => {
     setFormData({
       title: "",
       author: "",
@@ -116,6 +152,8 @@ export default function Books() {
       price: "",
       publishedYear: "",
     });
+    setEditBook(null);
+  };
 
   const handleAddBook = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,7 +166,6 @@ export default function Books() {
     });
     handleResetForm();
     refetch();
-
     createModalRef.current?.close();
   };
 
@@ -160,135 +197,235 @@ export default function Books() {
   };
 
   const handleDeleteBook = async (id: number) => {
+    setDeletingId(id);
     await deleteBook({ variables: { id } });
+    setDeletingId(null);
     refetch();
   };
 
   return (
-    <div className="p-10 bg-base-200 min-h-screen">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-4xl font-bold text-center text-primary">
-          📚 Book List
-        </h1>
-        <button
-          className="btn btn-primary"
-          onClick={() => {
-            createModalRef.current?.showModal();
-            handleResetForm();
-          }}
-        >
-          Add Book
-        </button>
-      </div>
-
-      {/* Book List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {data.books.map((book: Book) => (
-          <div key={book.id} className="card w-full bg-base-100 shadow-xl">
-            <div className="card-body">
-              <h2 className="card-title text-lg">{book.title}</h2>
-              <p className="text-sm text-gray-500">{book.author}</p>
-              <p className="badge badge-outline">{book.genre}</p>
-              <p className="text-md mt-2">📅 Published: {book.publishedYear}</p>
-              <p className="text-lg font-bold text-accent">
-                💲 {book.price.toFixed(2)}
-              </p>
-              <div className="card-actions justify-end">
-                <button
-                  onClick={() => handleEditBook(book)}
-                  className="btn btn-warning"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleDeleteBook(book.id)}
-                  className="btn btn-error"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
+    <div className="min-h-screen bg-base-200">
+      {/* Hero Header */}
+      <div className="bg-gradient-to-r from-primary to-secondary py-10 px-6 shadow-lg">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-5xl font-extrabold text-primary-content tracking-tight">
+              Book Library
+            </h1>
+            <p className="text-primary-content/70 mt-1 text-base">
+              Browse, add, and manage your collection
+            </p>
           </div>
-        ))}
+          <button
+            className="btn btn-neutral btn-md gap-2 shadow"
+            onClick={() => {
+              handleResetForm();
+              createModalRef.current?.showModal();
+            }}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                clipRule="evenodd"
+              />
+            </svg>
+            Add Book
+          </button>
+        </div>
       </div>
 
-      {/* Book Form */}
-      <dialog id="create_modal" className="modal" ref={createModalRef}>
-        <form
-          onSubmit={editBook ? handleUpdateBook : handleAddBook}
-          className="bg-white p-6 rounded-lg shadow-md mb-6 max-w-lg mx-auto"
-        >
-          <h2 className="text-xl font-semibold text-primary">
-            {editBook ? "Edit Book" : "Add a New Book"}
-          </h2>
-          <input
-            type="text"
-            placeholder="Title"
-            value={formData.title}
-            onChange={(e) =>
-              setFormData({ ...formData, title: e.target.value })
-            }
-            className="input input-bordered w-full mt-2"
-            required
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        {/* Stats */}
+        {!loading && !error && (
+          <div className="stats shadow mb-6 w-full bg-base-100">
+            <div className="stat">
+              <div className="stat-title">Total Books</div>
+              <div className="stat-value text-primary">{allBooks.length}</div>
+            </div>
+            <div className="stat">
+              <div className="stat-title">Genres</div>
+              <div className="stat-value text-secondary">{genres.length}</div>
+            </div>
+            {allBooks.length > 0 && (
+              <div className="stat">
+                <div className="stat-title">Avg. Price</div>
+                <div className="stat-value text-accent">
+                  ${avgPrice.toFixed(2)}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Search */}
+        {!loading && !error && (
+          <label className="input input-bordered flex items-center gap-2 mb-6">
+            <input
+              type="text"
+              className="grow"
+              placeholder="Search by title, author or genre"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+            />
+            {searchQuery && (
+              <button
+                className="btn btn-xs btn-ghost"
+                onClick={() => {
+                  setSearchQuery("");
+                  setCurrentPage(1);
+                }}
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </label>
+        )}
+
+        {/* Genre Filter */}
+        {!loading && !error && genres.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-6">
+            <button
+              className={`badge badge-lg cursor-pointer px-4 py-3 transition-all ${
+                selectedGenre === null
+                  ? "badge-primary"
+                  : "badge-outline hover:badge-primary"
+              }`}
+              onClick={() => {
+                setSelectedGenre(null);
+                setCurrentPage(1);
+              }}
+            >
+              All ({allBooks.length})
+            </button>
+            {genres.map((genre) => (
+              <button
+                key={genre}
+                className={`badge badge-lg cursor-pointer px-4 py-3 transition-all ${
+                  selectedGenre === genre
+                    ? "badge-primary"
+                    : "badge-outline hover:badge-primary"
+                }`}
+                onClick={() => {
+                  setSelectedGenre(genre);
+                  setCurrentPage(1);
+                }}
+              >
+                {genre} (
+                {allBooks.filter((b: Book) => b.genre === genre).length})
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Loading Skeletons */}
+        {loading && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="card bg-base-100 shadow-xl">
+                <div className="card-body gap-3">
+                  <div className="skeleton h-6 w-3/4 rounded" />
+                  <div className="skeleton h-4 w-1/2 rounded" />
+                  <div className="skeleton h-4 w-1/4 rounded-full" />
+                  <div className="divider my-0" />
+                  <div className="flex justify-between">
+                    <div className="skeleton h-4 w-1/3 rounded" />
+                    <div className="skeleton h-6 w-1/4 rounded" />
+                  </div>
+                  <div className="flex justify-end gap-2 mt-2">
+                    <div className="skeleton h-8 w-16 rounded" />
+                    <div className="skeleton h-8 w-16 rounded" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div role="alert" className="alert alert-error shadow-lg">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-6 w-6 shrink-0 stroke-current"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span>Failed to load books. Please try again.</span>
+            <button className="btn btn-sm" onClick={() => refetch()}>
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loading && !error && visibleBooks.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-24 gap-4 text-base-content/50">
+            <span className="text-7xl">📭</span>
+            <p className="text-xl font-medium">No books found</p>
+            {selectedGenre && (
+              <button
+                className="btn btn-sm btn-outline"
+                onClick={() => setSelectedGenre(null)}
+              >
+                Clear filter
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Book Grid */}
+        {!loading && !error && visibleBooks.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {pagedBooks.map((book: Book) => (
+              <BookCard
+                key={book.id}
+                book={book}
+                handleEditBook={handleEditBook}
+                handleDeleteBook={handleDeleteBook}
+                deletingId={deletingId}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && !error && totalPages > 1 && (
+          <Pagination
+            safePage={safePage}
+            totalPages={totalPages}
+            visibleBooks={visibleBooks}
+            setCurrentPage={setCurrentPage}
           />
-          <input
-            type="text"
-            placeholder="Author"
-            value={formData.author}
-            onChange={(e) =>
-              setFormData({ ...formData, author: e.target.value })
-            }
-            className="input input-bordered w-full mt-2"
-            required
-          />
-          <input
-            type="text"
-            placeholder="Genre"
-            value={formData.genre}
-            onChange={(e) =>
-              setFormData({ ...formData, genre: e.target.value })
-            }
-            className="input input-bordered w-full mt-2"
-            required
-          />
-          <input
-            type="number"
-            placeholder="Price"
-            value={formData.price}
-            onChange={(e) =>
-              setFormData({ ...formData, price: e.target.value })
-            }
-            className="input input-bordered w-full mt-2"
-            required
-          />
-          <input
-            type="number"
-            placeholder="Published Year"
-            value={formData.publishedYear}
-            onChange={(e) =>
-              setFormData({ ...formData, publishedYear: e.target.value })
-            }
-            className="input input-bordered w-full mt-2"
-            required
-          />
-          <button
-            type="submit"
-            className={`btn ${
-              editBook ? "btn-warning" : "btn-primary"
-            } w-full mt-4`}
-          >
-            {editBook ? "Update Book" : "Add Book"}
-          </button>
-          <button
-            type="reset"
-            onClick={() => createModalRef.current?.close()}
-            className="btn btn-neutral w-full mt-4"
-          >
-            Cancel
-          </button>
-        </form>
-      </dialog>
+        )}
+      </div>
+
+      {/* Book Form Modal */}
+      <Modal
+        createModalRef={createModalRef}
+        formData={formData}
+        setFormData={setFormData}
+        editBook={editBook}
+        handleAddBook={handleAddBook}
+        handleUpdateBook={handleUpdateBook}
+        handleResetForm={handleResetForm}
+      />
     </div>
   );
 }
