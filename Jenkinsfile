@@ -2,23 +2,9 @@ pipeline {
   agent any
 
   stages {
-    stage('Setup pnpm') {
-      steps {
-        sh 'pnpm -v || npm install -g pnpm'
-      }
-    }
-
-    stage('Prepare .env') {
-      steps {
-        withCredentials([file(credentialsId: 'graphql-book_library_env', variable: 'ENV_FILE')]) {
-          sh 'rm -f .env && cp $ENV_FILE .env'
-        }
-      }
-    }
-
     stage('Docker Build & Deploy') {
       steps {
-        sh 'docker compose up -d --build'
+        sh 'docker compose down && docker compose up -d --build'
       }
     }
   }

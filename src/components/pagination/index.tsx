@@ -5,7 +5,7 @@ interface PaginationProps {
   safePage: number;
   totalPages: number;
   visibleBooks: Book[];
-  setCurrentPage: (page: number) => void;
+  setCurrentPage: React.Dispatch<React.SetStateAction<number>>;
 }
 
 function Pagination({
@@ -34,7 +34,7 @@ function Pagination({
         <button
           className="join-item btn btn-sm"
           disabled={safePage === 1}
-          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+          onClick={() => setCurrentPage((p: number) => Math.max(1, p - 1))}
           aria-label="Previous page"
         >
           ‹
